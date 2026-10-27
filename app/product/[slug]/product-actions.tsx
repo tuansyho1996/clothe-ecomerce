@@ -5,7 +5,7 @@ import { useStorefront } from "../../storefront";
 
 const sizes = ["XS", "S", "M", "L", "XL"];
 
-export default function ProductActions({ productId }: { productId: number }) {
+export default function ProductActions({ productId }: { productId: string }) {
   const { addToCart } = useStorefront();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [message, setMessage] = useState("");

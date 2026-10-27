@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { categories, products } from "./products";
+import { categories } from "./products";
 import { useStorefront } from "./storefront";
 
 
@@ -25,7 +25,11 @@ export default function Home() {
     activeCategory,
     addToCart,
     favorites,
+    products,
+    productsError,
+    productsLoading,
     query,
+    reloadProducts,
     setActiveCategory,
     setQuery,
     toggleFavorite,
@@ -42,7 +46,7 @@ export default function Home() {
 
         return matchesCategory && matchesSearch;
       }),
-    [activeCategory, query],
+    [activeCategory, products, query],
   );
 
   return (
@@ -99,7 +103,16 @@ export default function Home() {
           <span className="product-count">{visibleProducts.length} pieces</span>
         </div>
 
-        {visibleProducts.length ? (
+        {productsLoading ? (
+          <div className="empty-search" role="status">
+            <p>Loading the collection…</p>
+          </div>
+        ) : productsError ? (
+          <div className="empty-search" role="alert">
+            <p>{productsError}</p>
+            <button type="button" onClick={() => void reloadProducts()}>Try again</button>
+          </div>
+        ) : visibleProducts.length ? (
           <div className="product-grid">
             {visibleProducts.map((product, index) => (
               <article className="product-card" key={product.id}>
@@ -109,10 +122,9 @@ export default function Home() {
                   <Link
                     className="product-image-link"
                     href={`/product/${product.slug}`}
-                    style={{ backgroundImage: `url("${product.image}")` }}
+                    style={product.image ? { backgroundImage: `url("${product.image}")` } : undefined}
                     aria-label={`View ${product.name} in ${product.color}`}
                   />
-                  {product.badge && <span className="product-badge">{product.badge}</span>}
                   <button
                     className={`favorite-button${favorites.includes(product.id) ? " favorited" : ""}`}
                     type="button"

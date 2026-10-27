@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
-import { products } from "../../products";
+import { connection } from "next/server";
+import { getProducts } from "@/lib/products";
 import ProductActions from "./product-actions";
-import ProductLoading from "./product-loading";
 
 type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
-}
-
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  await connection();
   const { slug } = await params;
+  const products = await getProducts();
   const product = products.find((item) => item.slug === slug);
 
   if (!product) {
@@ -28,16 +25,10 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   };
 }
 
-export default function ProductPage({ params }: ProductPageProps) {
-  return (
-    <Suspense fallback={<ProductLoading />}>
-      <ProductContent params={params} />
-    </Suspense>
-  );
-}
-
-async function ProductContent({ params }: ProductPageProps) {
+export default async function ProductPage({ params }: ProductPageProps) {
+  await connection();
   const { slug } = await params;
+  const products = await getProducts();
   const product = products.find((item) => item.slug === slug);
 
   if (!product) {
@@ -59,11 +50,10 @@ async function ProductContent({ params }: ProductPageProps) {
       <section className="product-detail" aria-labelledby="product-title">
         <div
           className={`product-detail-image product-image-${product.id}`}
-          style={{ backgroundImage: `url("${product.image.replace("w=900", "w=1400")}")` }}
+          style={product.image ? { backgroundImage: `url("${product.image}")` } : undefined}
           role="img"
           aria-label={`${product.name} in ${product.color}`}
         >
-          {product.badge && <span className="product-badge">{product.badge}</span>}
         </div>
         <div className="product-detail-copy">
           <span className="eyebrow"><span className="eyebrow-line" />{product.category}</span>
@@ -99,10 +89,9 @@ async function ProductContent({ params }: ProductPageProps) {
               <Link
                 className={`product-image product-image-${relatedProduct.id} related-product-image`}
                 href={`/product/${relatedProduct.slug}`}
-                style={{ backgroundImage: `url("${relatedProduct.image}")` }}
+                style={relatedProduct.image ? { backgroundImage: `url("${relatedProduct.image}")` } : undefined}
                 aria-label={`View ${relatedProduct.name}`}
               >
-                {relatedProduct.badge && <span className="product-badge">{relatedProduct.badge}</span>}
               </Link>
               <div className="product-info">
                 <div>

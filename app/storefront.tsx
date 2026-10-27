@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  Suspense,
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type Dispatch,
@@ -13,7 +15,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { products } from "./products";
+import type { Product } from "./products";
 
 type StorefrontContextValue = {
   activeCategory: string;
@@ -22,19 +24,68 @@ type StorefrontContextValue = {
   setQuery: Dispatch<SetStateAction<string>>;
   searchOpen: boolean;
   setSearchOpen: Dispatch<SetStateAction<boolean>>;
-  favorites: number[];
-  cart: Record<number, number>;
+  products: Product[];
+  productsLoading: boolean;
+  productsError: string;
+  reloadProducts: () => Promise<void>;
+  favorites: string[];
+  cart: Record<string, number>;
   cartCount: number;
   cartOpen: boolean;
   setCartOpen: Dispatch<SetStateAction<boolean>>;
   checkoutMessage: string;
   setCheckoutMessage: Dispatch<SetStateAction<string>>;
-  addToCart: (productId: number) => void;
-  changeQuantity: (productId: number, amount: number) => void;
-  toggleFavorite: (productId: number) => void;
+  addToCart: (productId: string) => void;
+  changeQuantity: (productId: string, amount: number) => void;
+  toggleFavorite: (productId: string) => void;
 };
 
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isProduct(value: unknown): value is Product {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.slug === "string" &&
+    typeof value.name === "string" &&
+    typeof value.category === "string" &&
+    typeof value.price === "number" &&
+    typeof value.color === "string" &&
+    typeof value.image === "string" &&
+    typeof value.description === "string"
+  );
+}
+
+async function requestProducts(): Promise<Product[]> {
+  const response = await fetch("/api/products", { cache: "no-store" });
+  const payload: unknown = await response.json();
+
+  if (!isRecord(payload)) {
+    throw new Error("The product service returned an invalid response.");
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload.error === "string"
+        ? payload.error
+        : "Could not load products. Please try again.",
+    );
+  }
+
+  if (!Array.isArray(payload.products) || !payload.products.every(isProduct)) {
+    throw new Error("The product service returned invalid product data.");
+  }
+
+  return payload.products;
+}
+
+function getProductsError(error: unknown) {
+  return error instanceof Error ? error.message : "Could not load products. Please try again.";
+}
 
 export function useStorefront() {
   const context = useContext(StorefrontContext);
@@ -155,6 +206,7 @@ function CartDrawer() {
     cartOpen,
     changeQuantity,
     checkoutMessage,
+    products,
     setCartOpen,
     setCheckoutMessage,
   } = useStorefront();
@@ -230,21 +282,62 @@ function CartDrawer() {
 }
 
 export function StorefrontProvider({ children }: { children: ReactNode }) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState("");
   const [activeCategory, setActiveCategory] = useState("All pieces");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [favorites, setFavorites] = useState<number[]>([]);
-  const [cart, setCart] = useState<Record<number, number>>({});
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const cartCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
 
-  const addToCart = useCallback((productId: number) => {
+  const reloadProducts = useCallback(async () => {
+    setProductsLoading(true);
+    setProductsError("");
+
+    try {
+      setProducts(await requestProducts());
+    } catch (error) {
+      setProductsError(getProductsError(error));
+    } finally {
+      setProductsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void requestProducts()
+      .then((result) => {
+        if (active) {
+          setProducts(result);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setProductsError(getProductsError(error));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setProductsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const addToCart = useCallback((productId: string) => {
     setCart((current) => ({ ...current, [productId]: (current[productId] ?? 0) + 1 }));
     setCheckoutMessage("");
   }, []);
 
-  const changeQuantity = useCallback((productId: number, amount: number) => {
+  const changeQuantity = useCallback((productId: string, amount: number) => {
     setCart((current) => {
       const nextQuantity = (current[productId] ?? 0) + amount;
       const nextCart = { ...current };
@@ -259,7 +352,7 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleFavorite = useCallback((productId: number) => {
+  const toggleFavorite = useCallback((productId: string) => {
     setFavorites((current) =>
       current.includes(productId)
         ? current.filter((id) => id !== productId)
@@ -275,6 +368,10 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       setQuery,
       searchOpen,
       setSearchOpen,
+      products,
+      productsLoading,
+      productsError,
+      reloadProducts,
       favorites,
       cart,
       cartCount,
@@ -290,6 +387,10 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
       activeCategory,
       query,
       searchOpen,
+      products,
+      productsLoading,
+      productsError,
+      reloadProducts,
       favorites,
       cart,
       cartCount,
@@ -303,7 +404,9 @@ export function StorefrontProvider({ children }: { children: ReactNode }) {
 
   return (
     <StorefrontContext.Provider value={value}>
-      <SiteHeader />
+      <Suspense fallback={null}>
+        <SiteHeader />
+      </Suspense>
       {children}
       <CartDrawer />
     </StorefrontContext.Provider>
