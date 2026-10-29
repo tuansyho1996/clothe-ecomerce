@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type FormEvent,
@@ -14,7 +15,7 @@ import {
   type SetStateAction,
 } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { Product } from "./products";
 
 type StorefrontContextValue = {
@@ -115,9 +116,109 @@ function SearchIcon() {
   );
 }
 
+type MenuEntry = {
+  id?: string;
+  label: string;
+  href?: string;
+  category?: string;
+  description?: string;
+  children?: MenuEntry[];
+};
+
+type MenuSection = { label: string; entries: MenuEntry[] };
+
+function isMenuEntry(value: unknown): value is MenuEntry {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "label" in value &&
+    typeof value.label === "string" &&
+    "href" in value &&
+    typeof value.href === "string" &&
+    (!("category" in value) || typeof value.category === "string") &&
+    (!("description" in value) || typeof value.description === "string") &&
+    (!("children" in value) ||
+      (Array.isArray(value.children) && value.children.every(isMenuEntry)))
+  );
+}
+
+const shopLink = "/#shop";
+const storyLink = "/about";
+const defaultMenuSections: MenuSection[] = [
+  {
+    label: "Women",
+    entries: [
+      { label: "All Women's Wear", href: shopLink, category: "All pieces" },
+      {
+        label: "Tops",
+        children: [
+          { label: "Linen Button-downs", href: shopLink, category: "Tops" },
+          { label: "Organic Cotton Tees", href: shopLink, category: "Tops" },
+          { label: "Blouses", href: shopLink, category: "Tops" },
+        ],
+      },
+      {
+        label: "Dresses & Jumpsuits",
+        children: [
+          { label: "Shift Dresses", href: shopLink, category: "Dresses" },
+          { label: "Wrap Dresses", href: shopLink, category: "Dresses" },
+          { label: "Linen Jumpsuits", href: shopLink, category: "Dresses" },
+        ],
+      },
+      {
+        label: "Bottoms",
+        children: [
+          { label: "High-waisted Wide-leg Pants", href: shopLink, category: "Bottoms" },
+          { label: "Culottes", href: shopLink, category: "Bottoms" },
+          { label: "Linen Skirts", href: shopLink, category: "Bottoms" },
+        ],
+      },
+      { label: "Loungewear & Basics", href: shopLink, category: "All pieces" },
+      { label: "Shop by Style · Wabi-Sabi / Capsule Wardrobe", href: storyLink },
+    ],
+  },
+  {
+    label: "Men",
+    entries: [
+      { label: "All Men's Wear", href: shopLink, category: "All pieces" },
+      {
+        label: "Tops",
+        children: [
+          { label: "Grandad Collar Shirts", href: shopLink, category: "Tops" },
+          { label: "Boxy Organic Tees", href: shopLink, category: "Tops" },
+          { label: "Relaxed Linen Shirts", href: shopLink, category: "Tops" },
+        ],
+      },
+      {
+        label: "Bottoms",
+        children: [
+          { label: "Straight-leg Linen Trousers", href: shopLink, category: "Bottoms" },
+          { label: "Casual Shorts", href: shopLink, category: "Bottoms" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Collections",
+    entries: [
+      { label: "Wabi-Sabi Spirit", href: storyLink, description: "Relaxed silhouettes, earthy tones, and natural textures." },
+      { label: "The Capsule Wardrobe", href: storyLink, description: "Essential pieces made to mix and match." },
+      { label: "Botanical & Line-Art", href: shopLink, category: "All pieces", description: "Quiet details inspired by nature." },
+      { label: "Eco Essentials", href: shopLink, category: "All pieces", description: "Everyday organic lounge and basics." },
+    ],
+  },
+  {
+    label: "Sustainability",
+    entries: [
+      { label: "Our Materials", href: storyLink },
+      { label: "Ethical Production", href: storyLink },
+      { label: "Garment Care Guide", href: storyLink },
+    ],
+  },
+];
+
 export function SiteHeader() {
   const {
-    activeCategory,
     cartCount,
     query,
     searchOpen,
@@ -126,13 +227,123 @@ export function SiteHeader() {
     setQuery,
     setSearchOpen,
   } = useStorefront();
-  const pathname = usePathname();
   const router = useRouter();
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuSections, setMenuSections] = useState(defaultMenuSections);
+  const [menuError, setMenuError] = useState("");
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchMenu() {
+      try {
+        const response = await fetch("/api/navigation-menu", { cache: "no-store" });
+        const result: unknown = await response.json();
+
+        if (
+          !response.ok ||
+          typeof result !== "object" ||
+          result === null ||
+          !("menu" in result) ||
+          !Array.isArray(result.menu) ||
+          !result.menu.every(isMenuEntry)
+        ) {
+          const errorMessage =
+            typeof result === "object" &&
+            result !== null &&
+            "error" in result &&
+            typeof result.error === "string"
+              ? result.error
+              : "Could not load the shop menu.";
+          throw new Error(errorMessage);
+        }
+
+        if (cancelled) return;
+
+        if (result.menu.length > 0) {
+          setMenuSections(
+            result.menu.map((section) => ({
+              label: section.label,
+              entries: section.children ?? [],
+            })),
+          );
+        }
+        setMenuError("");
+      } catch (error) {
+        if (!cancelled) {
+          setMenuError(error instanceof Error ? error.message : "Could not load the shop menu.");
+        }
+      }
+    }
+
+    void fetchMenu();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveMenu(null);
+        setMobileMenuOpen(false);
+      }
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !headerRef.current?.contains(event.target)) {
+        setActiveMenu(null);
+        setMobileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSearchOpen(false);
+    setActiveMenu(null);
+    setMobileMenuOpen(false);
     router.push("/#shop");
+  }
+
+  function selectMenuEntry(entry: MenuEntry) {
+    if (entry.href?.startsWith("/#shop")) {
+      setActiveCategory(entry.category ?? "All pieces");
+      setQuery("");
+    }
+    setActiveMenu(null);
+    setMobileMenuOpen(false);
+  }
+
+  function renderEntries(entries: MenuEntry[]) {
+    return (
+      <ul className="menu-tree">
+        {entries.map((entry) => (
+          <li key={entry.label}>
+            {entry.children && entry.children.length > 0 ? (
+              <details className="menu-tree-branch">
+                <summary>{entry.label}</summary>
+                {renderEntries(entry.children)}
+              </details>
+            ) : (
+              <Link href={entry.href ?? shopLink} onClick={() => selectMenuEntry(entry)}>
+                <span>{entry.label}</span>
+                {entry.description && <small>{entry.description}</small>}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   return (
@@ -141,20 +352,35 @@ export function SiteHeader() {
         A little something for your first order — take 10% off with <strong>HELLO10</strong>
         <span className="announcement-sparkle" aria-hidden="true">✳</span>
       </div>
-      <header className="site-header">
+      <header className="site-header" ref={headerRef}>
         <Link className="wordmark" href="/" aria-label="Sunday Studio home">sunday<span>.</span></Link>
         <nav className="main-nav" aria-label="Main navigation">
-          <Link href="/#shop" onClick={() => setActiveCategory("All pieces")}>Shop all</Link>
-          <Link
-            href="/#shop"
-            onClick={() => setActiveCategory("Tops")}
-            aria-current={pathname === "/" && activeCategory === "Tops" ? "page" : undefined}
-          >
-            Clothing
-          </Link>
-          <Link href="/about" aria-current={pathname === "/about" ? "page" : undefined}>Our story</Link>
+          {menuSections.map((section) => (
+            <button
+              className="menu-trigger"
+              type="button"
+              key={section.label}
+              aria-expanded={activeMenu === section.label}
+              onClick={() => setActiveMenu((current) => current === section.label ? null : section.label)}
+            >
+              {section.label}<span aria-hidden="true">⌄</span>
+            </button>
+          ))}
         </nav>
         <div className="header-actions">
+          <button
+            className="mobile-menu-toggle"
+            type="button"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="store-menu"
+            onClick={() => {
+              setMobileMenuOpen((open) => !open);
+              setActiveMenu(null);
+            }}
+          >
+            <span aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
+            <span className="sr-only">{mobileMenuOpen ? "Close menu" : "Open menu"}</span>
+          </button>
           <button
             className={`icon-button search-toggle${searchOpen ? " active" : ""}`}
             type="button"
@@ -175,6 +401,28 @@ export function SiteHeader() {
             <span className="bag-count">{cartCount}</span>
           </button>
         </div>
+        {(activeMenu || mobileMenuOpen) && (
+          <nav className={`menu-panel${mobileMenuOpen ? " mobile-open" : ""}`} id="store-menu" aria-label="Shop and information">
+            {menuError && <p className="menu-load-error" role="alert">{menuError} Showing the default menu.</p>}
+            {menuSections
+              .filter((section) => mobileMenuOpen || section.label === activeMenu)
+              .map((section) => (
+                <section className="menu-section" key={section.label}>
+                  {mobileMenuOpen ? (
+                    <details>
+                      <summary>{section.label}</summary>
+                      {renderEntries(section.entries)}
+                    </details>
+                  ) : (
+                    <>
+                      <h2>{section.label}</h2>
+                      {renderEntries(section.entries)}
+                    </>
+                  )}
+                </section>
+              ))}
+          </nav>
+        )}
       </header>
       {searchOpen && (
         <form className="search-bar" role="search" onSubmit={submitSearch}>

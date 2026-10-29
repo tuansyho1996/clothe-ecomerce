@@ -4,7 +4,7 @@ The storefront reads products and uploaded product images from the same MongoDB 
 
 ## Configure MongoDB
 
-Copy `.env.example` to `.env.local` and use the same `MONGODB_URI` and `MONGODB_DB` values as `manager-shop/.env.local`. The default database name is `manager_shop`.
+Copy `.env.example` to `.env.local` and use the same `MONGODB_URI` and `MONGODB_DB` values as `manager-shop/.env.local`. The default database name is `manager_shop`. The shop navigation menu is read from the `navigation_menu` collection and can be created in manager-shop under `/category`.
 
 Then start the storefront:
 
