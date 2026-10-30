@@ -3,6 +3,8 @@ import { getDatabaseName, getMongoClient } from "@/lib/mongodb";
 
 type MenuDocument = {
   _id: string;
+  kind: "menu";
+  name?: string;
   label: string;
   parentId: string | null;
   position: number;
@@ -11,7 +13,7 @@ type MenuDocument = {
   description?: string;
 };
 
-type MenuNode = Omit<MenuDocument, "_id"> & {
+type MenuNode = Omit<MenuDocument, "_id" | "kind"> & {
   id: string;
   children: MenuNode[];
 };
@@ -50,10 +52,64 @@ export async function GET() {
 
   try {
     const client = await getMongoClient();
-    const documents = await client
-      .db(getDatabaseName())
-      .collection<MenuDocument>("navigation_menu")
-      .find()
+    const database = client.db(getDatabaseName());
+    const categories = database.collection<MenuDocument>("categories");
+
+    const legacy = database.collection<MenuDocument>("navigation_menu");
+    const legacyNodes = await legacy.find().toArray();
+    const existingMenuNodes = await categories.find({ kind: "menu" }).toArray();
+    const missingNames = existingMenuNodes.filter((node) => !node.name);
+    if (missingNames.length > 0) {
+      await categories.bulkWrite(
+        missingNames.map((node) => ({
+          updateOne: {
+            filter: { _id: node._id },
+            update: { $set: { name: node._id } },
+          },
+        })),
+      );
+    }
+    const nodesToClean = [...legacyNodes, ...existingMenuNodes];
+    const excludedIds = new Set(
+      nodesToClean
+        .filter(
+          (node) =>
+            node._id === "journal-support" ||
+            node.label.toLocaleLowerCase() === "journal & support",
+        )
+        .map((node) => node._id),
+    );
+    let parents = [...excludedIds];
+
+    while (parents.length > 0) {
+      const children = nodesToClean
+        .filter((node) => node.parentId !== null && parents.includes(node.parentId))
+        .map((node) => node._id)
+        .filter((id) => !excludedIds.has(id));
+
+      for (const id of children) excludedIds.add(id);
+      parents = children;
+    }
+
+    if (excludedIds.size > 0) {
+      await categories.deleteMany({ _id: { $in: [...excludedIds] }, kind: "menu" });
+    }
+
+    const nodes = legacyNodes.filter((node) => !excludedIds.has(node._id));
+    if (nodes.length > 0) {
+      await categories.bulkWrite(
+        nodes.map((node) => ({
+          updateOne: {
+            filter: { _id: node._id },
+            update: { $setOnInsert: { ...node, name: node._id, kind: "menu" as const } },
+            upsert: true,
+          },
+        })),
+      );
+    }
+
+    const documents = await categories
+      .find({ kind: "menu" })
       .sort({ position: 1, label: 1 })
       .toArray();
 
