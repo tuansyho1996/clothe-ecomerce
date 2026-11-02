@@ -3,6 +3,7 @@ export type Product = {
   slug: string;
   name: string;
   category: string;
+  menuCategoryId?: string;
   price: number;
   color: string;
   image: string;

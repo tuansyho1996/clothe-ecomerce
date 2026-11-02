@@ -13,4 +13,4 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Products added in manager-shop will appear in the storefront when the page loads.
+Open [http://localhost:3000](http://localhost:3000). Products added in manager-shop will appear in the storefront when the page loads. Menu entries linked to the shop open their own `/menu/[id]` collection page, showing products assigned to that menu item.

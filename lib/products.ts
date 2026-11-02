@@ -6,6 +6,7 @@ type ProductDocument = {
   _id: ObjectId;
   name: string;
   category: string;
+  menuCategoryId?: string;
   price: number;
   color?: string;
   image?: string;
@@ -63,6 +64,7 @@ export async function getProducts(): Promise<Product[]> {
       slug: createSlug(document.name, id),
       name: document.name,
       category: document.category,
+      ...(document.menuCategoryId ? { menuCategoryId: document.menuCategoryId } : {}),
       price: document.price,
       color: color.startsWith("#") ? "Natural" : color || "Natural",
       image: getStorefrontImage(document.image),

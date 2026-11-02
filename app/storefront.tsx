@@ -54,6 +54,7 @@ function isProduct(value: unknown): value is Product {
     typeof value.slug === "string" &&
     typeof value.name === "string" &&
     typeof value.category === "string" &&
+    (!("menuCategoryId" in value) || typeof value.menuCategoryId === "string") &&
     typeof value.price === "number" &&
     typeof value.color === "string" &&
     typeof value.image === "string" &&
@@ -133,6 +134,7 @@ function isMenuEntry(value: unknown): value is MenuEntry {
     value !== null &&
     "label" in value &&
     typeof value.label === "string" &&
+    (!("id" in value) || typeof value.id === "string") &&
     "href" in value &&
     typeof value.href === "string" &&
     (!("category" in value) || typeof value.category === "string") &&
@@ -324,6 +326,13 @@ export function SiteHeader() {
     setMobileMenuOpen(false);
   }
 
+  function getMenuEntryHref(entry: MenuEntry) {
+    if (entry.id && entry.href?.startsWith("/#shop")) {
+      return `/menu/${encodeURIComponent(entry.id)}`;
+    }
+    return entry.href ?? shopLink;
+  }
+
   function renderEntries(entries: MenuEntry[]) {
     return (
       <ul className="menu-tree">
@@ -335,7 +344,7 @@ export function SiteHeader() {
                 {renderEntries(entry.children)}
               </details>
             ) : (
-              <Link href={entry.href ?? shopLink} onClick={() => selectMenuEntry(entry)}>
+              <Link href={getMenuEntryHref(entry)} onClick={() => selectMenuEntry(entry)}>
                 <span>{entry.label}</span>
                 {entry.description && <small>{entry.description}</small>}
               </Link>
