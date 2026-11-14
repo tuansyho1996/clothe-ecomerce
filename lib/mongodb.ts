@@ -12,7 +12,10 @@ export function getMongoClient() {
   }
 
   if (!global.mongoClientPromise) {
-    global.mongoClientPromise = new MongoClient(uri).connect();
+    global.mongoClientPromise = new MongoClient(uri).connect().catch((error: unknown) => {
+      global.mongoClientPromise = undefined;
+      throw error;
+    });
   }
 
   return global.mongoClientPromise;

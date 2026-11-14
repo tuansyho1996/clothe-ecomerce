@@ -145,79 +145,6 @@ function isMenuEntry(value: unknown): value is MenuEntry {
 }
 
 const shopLink = "/#shop";
-const storyLink = "/about";
-const defaultMenuSections: MenuSection[] = [
-  {
-    label: "Women",
-    entries: [
-      { label: "All Women's Wear", href: shopLink, category: "All pieces" },
-      {
-        label: "Tops",
-        children: [
-          { label: "Linen Button-downs", href: shopLink, category: "Tops" },
-          { label: "Organic Cotton Tees", href: shopLink, category: "Tops" },
-          { label: "Blouses", href: shopLink, category: "Tops" },
-        ],
-      },
-      {
-        label: "Dresses & Jumpsuits",
-        children: [
-          { label: "Shift Dresses", href: shopLink, category: "Dresses" },
-          { label: "Wrap Dresses", href: shopLink, category: "Dresses" },
-          { label: "Linen Jumpsuits", href: shopLink, category: "Dresses" },
-        ],
-      },
-      {
-        label: "Bottoms",
-        children: [
-          { label: "High-waisted Wide-leg Pants", href: shopLink, category: "Bottoms" },
-          { label: "Culottes", href: shopLink, category: "Bottoms" },
-          { label: "Linen Skirts", href: shopLink, category: "Bottoms" },
-        ],
-      },
-      { label: "Loungewear & Basics", href: shopLink, category: "All pieces" },
-      { label: "Shop by Style · Wabi-Sabi / Capsule Wardrobe", href: storyLink },
-    ],
-  },
-  {
-    label: "Men",
-    entries: [
-      { label: "All Men's Wear", href: shopLink, category: "All pieces" },
-      {
-        label: "Tops",
-        children: [
-          { label: "Grandad Collar Shirts", href: shopLink, category: "Tops" },
-          { label: "Boxy Organic Tees", href: shopLink, category: "Tops" },
-          { label: "Relaxed Linen Shirts", href: shopLink, category: "Tops" },
-        ],
-      },
-      {
-        label: "Bottoms",
-        children: [
-          { label: "Straight-leg Linen Trousers", href: shopLink, category: "Bottoms" },
-          { label: "Casual Shorts", href: shopLink, category: "Bottoms" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Collections",
-    entries: [
-      { label: "Wabi-Sabi Spirit", href: storyLink, description: "Relaxed silhouettes, earthy tones, and natural textures." },
-      { label: "The Capsule Wardrobe", href: storyLink, description: "Essential pieces made to mix and match." },
-      { label: "Botanical & Line-Art", href: shopLink, category: "All pieces", description: "Quiet details inspired by nature." },
-      { label: "Eco Essentials", href: shopLink, category: "All pieces", description: "Everyday organic lounge and basics." },
-    ],
-  },
-  {
-    label: "Sustainability",
-    entries: [
-      { label: "Our Materials", href: storyLink },
-      { label: "Ethical Production", href: storyLink },
-      { label: "Garment Care Guide", href: storyLink },
-    ],
-  },
-];
 
 export function SiteHeader() {
   const {
@@ -232,7 +159,7 @@ export function SiteHeader() {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [menuSections, setMenuSections] = useState(defaultMenuSections);
+  const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
   const [menuError, setMenuError] = useState("");
   const headerRef = useRef<HTMLElement>(null);
 
@@ -264,14 +191,12 @@ export function SiteHeader() {
 
         if (cancelled) return;
 
-        if (result.menu.length > 0) {
-          setMenuSections(
-            result.menu.map((section) => ({
-              label: section.label,
-              entries: section.children ?? [],
-            })),
-          );
-        }
+        setMenuSections(
+          result.menu.map((section) => ({
+            label: section.label,
+            entries: section.children ?? [],
+          })),
+        );
         setMenuError("");
       } catch (error) {
         if (!cancelled) {
@@ -375,6 +300,7 @@ export function SiteHeader() {
               {section.label}<span aria-hidden="true">⌄</span>
             </button>
           ))}
+          {menuError && <p className="menu-load-error" role="alert">{menuError}</p>}
         </nav>
         <div className="header-actions">
           <button
@@ -412,7 +338,6 @@ export function SiteHeader() {
         </div>
         {(activeMenu || mobileMenuOpen) && (
           <nav className={`menu-panel${mobileMenuOpen ? " mobile-open" : ""}`} id="store-menu" aria-label="Shop and information">
-            {menuError && <p className="menu-load-error" role="alert">{menuError} Showing the default menu.</p>}
             {menuSections
               .filter((section) => mobileMenuOpen || section.label === activeMenu)
               .map((section) => (
